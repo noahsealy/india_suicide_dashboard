@@ -75,14 +75,16 @@ app.layout = html.Div([
                 children=[
                     html.P(id='selected_print',
                            children={},
-                    ),
-                    dcc.Graph(id='feature_description', figure={})
+                           ),
+                    dcc.Dropdown(id='description_select', value=[], options=[]),
+                    dcc.Graph(id='feature_description', figure={}),
+                    html.P(id='risk_level', children={}),
                 ],
                 className='col-6'
             )
         ]
     ),
-
+    html.Hr(),
     dbc.Row(
         children=[
             dbc.Col(
@@ -117,7 +119,6 @@ app.layout = html.Div([
     [Input(component_id='select_year', component_property='value')]
 )
 def update_graph(slider_select):
-
     container = "The year chosen by user was: {}".format(slider_select)
 
     dff = pd.read_csv('year_data/' + str(slider_select) + '.csv')
@@ -131,16 +132,16 @@ def update_graph(slider_select):
                 "/e388c4cae20aa53cb5090210a42ebb9b765c0a36/india_states.geojson",
         featureidkey='properties.ST_NM',
         locations='State',
-        color='Total', #z
-        #cluster
+        color='Total',  # z
+        # cluster
         hover_data=['State', 'Total', 'Causes_Bankruptcy or Sudden change in Economic Status',
                     'Causes_Cancellation/Non-Settlement of Marriage', 'Causes_Cancer', 'Causes_Causes Not known',
                     'Causes_Death of Dear Person', 'Causes_Divorce', 'Causes_Dowry Dispute'],
-        #color_continuous_scale=px.colors.sequential.YlOrRd,
+        # color_continuous_scale=px.colors.sequential.YlOrRd,
         color_continuous_scale='Reds',
         range_color=[0, 20000],
         labels={'Total': 'Total Suicides in India'},
-        #template='plotly_dark',
+        # template='plotly_dark',
     )
 
     fig.update_geos(fitbounds="locations", visible=False)
@@ -151,7 +152,8 @@ def update_graph(slider_select):
 # for selecting map data
 @app.callback(
     [Output(component_id='selected_print', component_property='children'),
-     Output(component_id='feature_description', component_property='figure'),
+     Output(component_id='description_select', component_property='value'),
+     Output(component_id='description_select', component_property='options'),
      Output(component_id='gender_bar', component_property='figure'),
      Output(component_id='professions_bar', component_property='figure'),
      Output(component_id='causes_bar', component_property='figure')],
@@ -163,7 +165,7 @@ def select_data(clicked, selected):
         if selected is None:
             selected = clicked
 
-        locations_str = []
+        locations_str = ['State(s) Selected: ']
         locations = []
         for point in selected['points']:
             for attr, value in point.items():
@@ -175,21 +177,28 @@ def select_data(clicked, selected):
         # this is what the figures will use for data
         selected_states = dff[dff['State'].isin(locations)]
 
-        # figure for correlation (IDENTIFY RISK GROUPS)
-        correlations = []
+        # find all column options and slice them for labels to look better
+        feature_description_select = []
         for col in selected_states.columns:
-            if col != 'Total' or col != 'State' or col != 'Year' or col != 'Unnamed':
-                correlations.append(selected_states['Total'].corr(selected_states[col]))
-        print(correlations)
+            if 'Professional_Profile_' in col:
+                label = col[21:]
+                feature_description_select.append({'label': label, 'value': col})
+            elif 'Education_Status_' in col:
+                label = col[17:]
+                feature_description_select.append({'label': label, 'value': col})
+            elif 'Social_Status_' in col:
+                label = col[14:]
+                feature_description_select.append({'label': label, 'value': col})
 
-        feature_description = go.Figure()
+        # set default value
+        feature_description_value = feature_description_select[0]['value']
 
         gender_bar = go.Figure()
         # bar chart for gender
         gender_bar.add_trace(go.Bar(y=['Gender'], x=[selected_states['Female'].sum()], name='Female', orientation='h',
-                             marker=dict(color='pink')))
+                                    marker=dict(color='pink')))
         gender_bar.add_trace(go.Bar(y=['Gender'], x=[selected_states['Male'].sum()], name='Male', orientation='h',
-                             marker=dict(color='blue')))
+                                    marker=dict(color='blue')))
         gender_bar.update_layout(title_text='Data by Gender')
 
         # get all professions
@@ -234,19 +243,34 @@ def select_data(clicked, selected):
         causes_bar.add_trace(go.Bar(x=causes_sliced, y=causes_values))
         causes_bar.update_layout(title_text='Data by Cause')
 
-        return locations_str, feature_description, gender_bar, professions_bar, causes_bar
+        return locations_str, feature_description_value, feature_description_select, \
+               gender_bar, professions_bar, causes_bar
 
     # init data
     except TypeError:
         temp = dff[dff['State'] == 'Maharashtra']
 
-        feature_description = go.Figure()
+        # find all column options and slice them for labels to look better
+        feature_description_select = []
+        for col in temp.columns:
+            if 'Professional_Profile_' in col:
+                label = col[21:]
+                feature_description_select.append({'label': label, 'value': col})
+            elif 'Education_Status_' in col:
+                label = col[17:]
+                feature_description_select.append({'label': label, 'value': col})
+            elif 'Social_Status_' in col:
+                label = col[14:]
+                feature_description_select.append({'label': label, 'value': col})
+
+        # set default value
+        feature_description_value = feature_description_select[0]['value']
 
         gender_bar = go.Figure()
         gender_bar.add_trace(go.Bar(y=['Gender'], x=temp['Female'], name='Female', orientation='h',
-                             marker=dict(color='pink')))
+                                    marker=dict(color='pink')))
         gender_bar.add_trace(go.Bar(y=['Gender'], x=temp['Male'], name='Male', orientation='h',
-                             marker=dict(color='blue')))
+                                    marker=dict(color='blue')))
         gender_bar.update_layout(title_text='Data by Gender')
 
         # get all professions
@@ -269,7 +293,6 @@ def select_data(clicked, selected):
         professions_bar.add_trace(go.Bar(x=professions_sliced, y=profession_values))
         professions_bar.update_layout(title_text='Data by Profession')
 
-
         # get all causes
         causes = []
         for column in temp.columns:
@@ -290,7 +313,100 @@ def select_data(clicked, selected):
         causes_bar.add_trace(go.Bar(x=causes_sliced, y=causes_values))
         causes_bar.update_layout(title_text='Data by Cause')
 
-        return ['Maharashtra'], feature_description, gender_bar, professions_bar, causes_bar
+        return ['States(s) Selected: Maharashtra'], feature_description_value, feature_description_select, \
+               gender_bar, professions_bar, causes_bar
+
+
+@app.callback([Output(component_id='feature_description', component_property='figure'),
+               Output(component_id='risk_level', component_property='children')],
+              [Input(component_id='description_select', component_property='value'),
+               Input(component_id='suicide_map', component_property='clickData'),
+               Input(component_id='suicide_map', component_property='selectedData')])
+def feature_matrix(feature, clicked, selected):
+    try:
+        if selected is None:
+            selected = clicked
+
+        locations = []
+        for point in selected['points']:
+            for attr, value in point.items():
+                if attr == 'location':
+                    locations.append(str(value))
+
+        # combine all select states into one df series
+        # this is what the figures will use for data
+        if len(locations) == 1:
+            selected_states = pd.DataFrame()
+            for location in locations:
+                df = pd.read_csv('state_data/' + str(location) + '.csv')
+                selected_states = selected_states.append(df, ignore_index=True)
+        else:
+            locations = []
+            for point in selected['points']:
+                for attr, value in point.items():
+                    if attr == 'location':
+                        locations.append(str(value))
+
+            selected_states = dff[dff['State'].isin(locations)]
+
+        label = ''
+        if 'Professional_Profile_' in feature:
+            label = feature[21:]
+        elif 'Education_Status_' in feature:
+            label = feature[17:]
+        elif 'Social_Status_' in feature:
+            label = feature[14:]
+
+        # find correlation matrix
+        corr = selected_states[['Total', feature]].corr(method='pearson')
+        # visualize correlation matrix
+        corr_map = go.Figure()
+        corr_map.add_trace(go.Heatmap(x=['Total', label], y=['Total', label], z=corr, colorscale='reds'))
+        corr_map.update_layout(title_text='Correlation Heatmap')
+
+        risk = corr.iloc[0, 1]
+
+        if risk >= .80:
+            risk_rating = 'This group is at high risk. \nNote, if a single state was selected, this data is based on ' \
+                          'that state from 2001 to 2012 data.'
+        elif (risk < .80) and (risk >= 0.50):
+            risk_rating = 'This group is at moderate risk. \nNote, if a single state was selected, this data is based on ' \
+                          'that state from 2001 to 2012 data.'
+        else:
+            risk_rating = 'This group is at a low risk. \nNote, if a single state was selected, this data is based on ' \
+                          'that state from 2001 to 2012 data.'
+        return corr_map, risk_rating
+
+    # init data
+    except TypeError:
+        selected_states = pd.read_csv('state_data/Maharashtra.csv')
+
+        if 'Professional_Profile_' in feature:
+            label = feature[21:]
+        elif 'Education_Status_' in feature:
+            label = feature[17:]
+        elif 'Social_Status_' in feature:
+            label = feature[14:]
+
+        # find correlation matrix
+        corr = selected_states[['Total', feature]].corr(method='pearson')
+        # visualize correlation matrix
+        corr_map = go.Figure()
+        corr_map.add_trace(go.Heatmap(x=['Total', label], y=['Total', label], z=corr, colorscale='reds'))
+        corr_map.update_layout(title_text='Correlation Heatmap')
+
+        risk = corr.iloc[0, 1]
+
+        if risk >= .80:
+            risk_rating = 'This group is at high risk. \nNote, if a single state was selected, this data is based on ' \
+                          'that state from 2001 to 2012 data.'
+        elif (risk < .80) and (risk >= 0.50):
+            risk_rating = 'This group is at moderate risk. \nNote, if a single state was selected, this data is based' \
+                          ' on that state from 2001 to 2012 data.'
+        else:
+            risk_rating = 'This group is at a low risk. \nNote, if a single state was selected, this data is based on' \
+                          ' that state from 2001 to 2012 data.'
+        return corr_map, risk_rating
 
 
 if __name__ == '__main__':
