@@ -65,6 +65,12 @@ app.layout = dbc.Container([
 
     dbc.Row(
         children=[
+            html.P(id='error', children='No state(s) selected!', hidden=False, style={'color': 'red'}),
+        ]
+    ),
+
+    dbc.Row(
+        children=[
             dbc.Col(
                 children=[
                     html.P(children='Select Type Code:'),
@@ -99,7 +105,8 @@ app.layout = dbc.Container([
                                           {'label': '45-59', 'value': 3},
                                           {'label': '60+', 'value': 4}],
                                  value=2,
-                                 clearable=False),
+                                 clearable=False,
+                                 disabled=False),
                 ],
                 className='col-4'
             ),
@@ -115,48 +122,6 @@ app.layout = dbc.Container([
             )
         ]
     ),
-
-    # dbc.Row(
-    #     children=[
-    #         dbc.Col(
-    #             children=[
-    #                 dcc.Dropdown(id='confusion_x_select', value=0,
-    #                              options=[{'label': 'Profession', 'value': 0},
-    #                                       {'label': 'Cause', 'value': 1},
-    #                                       {'label': 'Education Level', 'value': 2},
-    #                                       {'label': 'Social Status', 'value': 3}],
-    #                              clearable=False),
-    #             ],
-    #             className='col-6'
-    #         ),
-    #         dbc.Col(
-    #             children=[
-    #                 dcc.Dropdown(id='confusion_y_select', value=1,
-    #                              options=[{'label': 'Profession', 'value': 0},
-    #                                       {'label': 'Cause', 'value': 1},
-    #                                       {'label': 'Education Level', 'value': 2},
-    #                                       {'label': 'Social Status', 'value': 3}],
-    #                              clearable=False),
-    #             ],
-    #             className='col-6'
-    #
-    #         )
-    #     ],
-    # ),
-    # dbc.Row(
-    #     children=[
-    #         dbc.Col(
-    #             children=[
-    #                 dcc.Graph(id='feature_description', figure={}),
-    #                 html.P(id='risk_level', children={}),
-    #                 html.P(children='Note: if a single state was selected, this data is based on that state from 2001 '
-    #                                 'to 2012 data.')
-    #             ]
-    #         )
-    #     ]
-    # ),
-    # html.Hr(),
-
 ])
 
 
@@ -217,10 +182,34 @@ def display_selected_state(clicked, selected):
 
         return states_ret
     except TypeError:
-        return 'States(s): Maharashtra,'
+        return 'No state(s) selected!'
 
 
-@app.callback(Output(component_id='trends_figure', component_property='figure'),
+@app.callback([Output(component_id='age_select', component_property='options'),
+               Output(component_id='age_select', component_property='value'),
+               Output(component_id='age_select', component_property='disabled')],
+              Input(component_id='type_code_select', component_property='value'))
+def age_options(type_code):
+    # age options for profession and causes type codes
+    if type_code == 0 or type_code == 1:
+        value = 0
+        options = [{'label': '0-14', 'value': 0},
+                   {'label': '15-29', 'value': 1},
+                   {'label': '30-44', 'value': 2},
+                   {'label': '45-59', 'value': 3},
+                   {'label': '60+', 'value': 4}]
+        disabled = False
+        return options, value, disabled
+    # age options for education and social status type codes
+    else:
+        value = 0
+        options = [{'label': 'All ages', 'value': 0}]
+        disabled = True
+        return options, value, disabled
+
+
+@app.callback([Output(component_id='trends_figure', component_property='figure'),
+               Output(component_id='error', component_property='hidden')],
               [Input(component_id='suicide_map', component_property='clickData'),
                Input(component_id='suicide_map', component_property='selectedData'),
                Input(component_id='type_code_select', component_property='value'),
@@ -269,16 +258,21 @@ def trends_fig(clicked, selected, type_code, gender, age):
         else:
             selected_gender = selected_code
 
-        if age == 0:
-            selected_age = selected_gender[selected_gender['Age_group'] == '0-14']
-        elif age == 1:
-            selected_age = selected_gender[selected_gender['Age_group'] == '15-29']
-        elif age == 2:
-            selected_age = selected_gender[selected_gender['Age_group'] == '30-44']
-        elif age == 3:
-            selected_age = selected_gender[selected_gender['Age_group'] == '45-59']
+        # age options for profession and causes type code
+        if type_code == 0 or type_code == 1:
+            if age == 0:
+                selected_age = selected_gender[selected_gender['Age_group'] == '0-14']
+            elif age == 1:
+                selected_age = selected_gender[selected_gender['Age_group'] == '15-29']
+            elif age == 2:
+                selected_age = selected_gender[selected_gender['Age_group'] == '30-44']
+            elif age == 3:
+                selected_age = selected_gender[selected_gender['Age_group'] == '45-59']
+            else:
+                selected_age = selected_gender[selected_gender['Age_group'] == '60']
+        # age options for education and social status type code
         else:
-            selected_age = selected_gender[selected_gender['Age_group'] == '60']
+            selected_age = selected_gender[selected_gender['Age_group'] == '0-100+']
 
         refined_data = selected_age
         uniqueValues = refined_data['Type'].unique()
@@ -297,132 +291,12 @@ def trends_fig(clicked, selected, type_code, gender, age):
                                      y=y,
                                      mode='lines+markers', name=type))
 
-        return fig
+        hidden = True
+        return fig, hidden
     except TypeError:
+        hidden = False
         fig = go.Figure()
-        return fig
-
-
-# # confusion matrix -- to be removed soon...
-# @app.callback(
-#     [Output(component_id='selected_display', component_property='children'),
-#      Output(component_id='feature_description', component_property='figure')],
-#     [Input(component_id='suicide_map', component_property='clickData'),
-#      Input(component_id='suicide_map', component_property='selectedData'),
-#      Input(component_id='confusion_x_select', component_property='value'),
-#      Input(component_id='confusion_y_select', component_property='value'),
-#      Input(component_id='select_year', component_property='value')]
-#
-# )
-# def select_state(clicked, selected, confusion_x, confusion_y, selected_year):
-#     try:
-#         if selected is None:
-#             selected = clicked
-#
-#         # extract selected data
-#         states = []
-#         for point in selected['points']:
-#             for attr, value in point.items():
-#                 if attr == 'location':
-#                     states.append(str(value))
-#
-#         # return string for display
-#         states_ret = 'State(s): '
-#         for state in states:
-#             states_ret = states_ret + str(state) + ', '
-#
-#         # grab selected data
-#         dff = df[df['State'].isin(states)]
-#         selected_states = dff[dff['Year'] == selected_year]
-#
-#         # split up data
-#         profession_col = []
-#         profession_label = []
-#         education_col = []
-#         education_label = []
-#         social_col = []
-#         social_label = []
-#         cause_col = []
-#         cause_label = []
-#         for feature in selected_states.columns:
-#             if 'Professional_Profile_' in feature:
-#                 label = feature[21:]
-#                 profession_col.append(feature)
-#                 profession_label.append(label)
-#             elif 'Education_Status_' in feature:
-#                 label = feature[17:]
-#                 education_col.append(feature)
-#                 education_label.append(label)
-#             elif 'Social_Status_' in feature:
-#                 label = feature[14:]
-#                 social_col.append(feature)
-#                 social_label.append(label)
-#             elif 'Causes_' in feature:
-#                 label = feature[7:]
-#                 cause_col.append(feature)
-#                 cause_label.append(label)
-#
-#         # select label depending on selection for x
-#         if confusion_x == 'Cause':
-#             #x = selected_states[cause_col]
-#             x = cause_col
-#             x_labels = cause_label
-#         elif confusion_x == 'Education Level':
-#             #x = selected_states[education_col]
-#             x = education_col
-#             x_labels = education_label
-#         elif confusion_x == 'Social Status':
-#             #x = selected_states[social_col]
-#             x = social_col
-#             x_labels = social_label
-#         else: #  default to profession for x
-#             #x = selected_states[profession_col]
-#             x = profession_col
-#             x_labels = profession_label
-#
-#         # select label depending on selection for y
-#         if confusion_y == 'Profession':
-#             #y = selected_states[profession_col]
-#             y = profession_col
-#             y_labels = profession_label
-#         elif confusion_y == 'Education Level':
-#             #y = selected_states[education_col]
-#             y = education_col
-#             y_labels = education_label
-#         elif confusion_y == 'Social Status':
-#             #y = selected_states[social_col]
-#             y = social_col
-#             y_labels = social_label
-#         else: #  default to profession for y
-#             #y = selected_states[cause_col]
-#             y = cause_col
-#             y_labels = cause_label
-#
-#         # # find correlation matrix
-#         # corr = selected_states[['Total', feature]].corr(method='pearson')
-#
-#         x.extend(y)
-#         print(selected_states[x])
-#         x_labels.extend(y_labels)
-#         corr = selected_states[x].corr(method='pearson')
-#         #corr = selected_states[x].corrwith(selected_states[y])
-#         #corr = selected_states[['Total', feature]].corr(method='pearson')
-#         #print(corr)
-#         # # visualize correlation matrix
-#         corr_map = go.Figure()
-#         corr_map.add_trace(go.Heatmap(x=x_labels, y=x_labels, z=corr, colorscale='reds'))
-#         #corr_map.add_trace(go.Heatmap(x=x_labels, y=y_labels, z=corr, colorscale='reds'))
-#         corr_map.update_layout(title_text='Correlation Heatmap', height=700)
-#
-#         return states_ret, corr_map
-#
-#     # init data
-#     except TypeError:
-#         states = 'Maharashtra'
-#
-#         fig = go.Figure()
-#
-#         return 'State(s): ' + states, fig
+        return fig, hidden
 
 
 if __name__ == '__main__':
