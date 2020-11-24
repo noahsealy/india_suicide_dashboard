@@ -9,7 +9,9 @@ from dash.dependencies import Input, Output
 
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
+# processed_suicide_data.csv is used for bar charts and map
 df = pd.read_csv('processed_suicide_data.csv')
+# data.csv is used for scatter charts
 data = pd.read_csv('data.csv')
 
 app.layout = dbc.Container([
@@ -65,7 +67,7 @@ app.layout = dbc.Container([
 
     dbc.Row(
         children=[
-            html.P(id='error', children='No state(s) selected!', hidden=False, style={'color': 'red'}),
+            html.P(id='type_code_error', children='No state(s) selected!', hidden=False, style={'color': 'red'}),
         ]
     ),
 
@@ -122,6 +124,37 @@ app.layout = dbc.Container([
             )
         ]
     ),
+    html.Hr(),
+    dbc.Row(
+        children=[
+            html.P(id='data_by_error', children='No state(s) selected!', hidden=False, style={'color': 'red'}),
+        ]
+    ),
+    dbc.Row(
+        children=[
+            dbc.Col(
+                children=[
+                    dcc.Dropdown(id='data_by_select',
+                                 value='profession',
+                                 options=[{'label': 'Data by Profession', 'value': 'profession'},
+                                          {'label': 'Data by Cause', 'value': 'cause'},
+                                          {'label': 'Data by Gender', 'value': 'gender'}, ],
+                                 className='col-3', clearable=False, searchable=False
+                                 )
+                ]
+            )
+        ]
+    ),
+    dbc.Row(
+        children=[
+            dbc.Col(
+                children=[
+                    dcc.Graph(id='data_by_figure', figure={})
+                ]
+            )
+        ],
+    ),
+    html.Hr(),
 ])
 
 
@@ -206,7 +239,7 @@ def age_options(type_code):
 
 
 @app.callback([Output(component_id='trends_figure', component_property='figure'),
-               Output(component_id='error', component_property='hidden')],
+               Output(component_id='type_code_error', component_property='hidden')],
               [Input(component_id='suicide_map', component_property='clickData'),
                Input(component_id='suicide_map', component_property='selectedData'),
                Input(component_id='type_code_select', component_property='value'),
@@ -295,6 +328,97 @@ def trends_fig(clicked, selected, type_code, gender, age):
         hidden = False
         fig = go.Figure()
         return fig, hidden
+
+
+@app.callback([Output(component_id='data_by_figure', component_property='figure'),
+               Output(component_id='data_by_error', component_property='hidden')],
+              [Input(component_id='data_by_select', component_property='value'),
+               Input(component_id='select_year', component_property='value'),
+               Input(component_id='suicide_map', component_property='clickData'),
+               Input(component_id='suicide_map', component_property='selectedData')])
+def data_by(figure_select, year, clicked, selected):
+    try:
+        if selected is None:
+            selected = clicked
+
+        locations_str = ['State(s) Selected: ']
+        locations = []
+        for point in selected['points']:
+            for attr, value in point.items():
+                if attr == 'location':
+                    locations_str.append(str(value) + ", ")
+                    locations.append(str(value))
+
+        # combine all select states into one df series
+        # this is what the figures will use for data
+        selected_states = df[df['State'].isin(locations)]
+
+        selected_states = selected_states[selected_states['Year'] == year]
+
+        if figure_select == 'profession':
+            # get all professions
+            professions = []
+            for col in selected_states.columns:
+                if 'Professional_Profile_' in col:
+                    professions.append(col)
+
+            # slice the profession strings so they just say the professions
+            professions_sliced = []
+            for profession in professions:
+                professions_sliced.append(profession[21:])
+
+            # y values for professions
+            profession_values = []
+            for profession in professions:
+                profession_values.append(selected_states[profession].sum())
+
+            # chart for profession
+            professions_bar = go.Figure()
+            professions_bar.add_trace(go.Bar(x=professions_sliced, y=profession_values,
+                                      marker=dict(color=profession_values, colorscale='PuRd')))
+            professions_bar.update_layout(title_text='Data by Profession (' + str(year) + ')')
+
+            return professions_bar, True
+
+        elif figure_select == 'cause':
+            # get all causes
+            causes = []
+            for column in selected_states.columns:
+                if 'Causes_' in column:
+                    causes.append(column)
+
+            # slice the causes strings so they just say the causes
+            causes_sliced = []
+            for cause in causes:
+                causes_sliced.append(cause[7:])
+
+            # y value for causes
+            causes_values = []
+            for cause in causes:
+                causes_values.append(selected_states[cause].sum())
+
+            # chart for causes
+            causes_bar = go.Figure()
+            causes_bar.add_trace(go.Bar(x=causes_sliced, y=causes_values,
+                                        marker=dict(color=causes_values, colorscale='PuRd')))
+            causes_bar.update_layout(title_text='Data by Cause (' + str(year) + ')')
+
+            return causes_bar, True
+
+        else:  # gender
+            gender_bar = go.Figure()
+            gender_bar.add_trace(
+                go.Bar(y=['Gender'], x=[selected_states['Female'].sum()], name='Female', orientation='h',
+                       marker=dict(color=[selected_states['Female'].sum()], colorscale='PuRd')))
+            gender_bar.add_trace(go.Bar(y=['Gender'], x=[selected_states['Male'].sum()], name='Male', orientation='h',
+                                        marker=dict(color=[selected_states['Male'].sum()], colorscale='reds')))
+            gender_bar.update_layout(title_text='Data by Gender (' + str(year) + ')')
+
+            return gender_bar, True
+
+    except TypeError:
+        no = go.Figure()
+        return no, False
 
 
 if __name__ == '__main__':
