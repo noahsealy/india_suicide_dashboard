@@ -146,13 +146,10 @@ def update_graph(slider_select):
         featureidkey='properties.ST_NM',
         locations='State',
         color='Total',  # z
-        # cluster
         hover_data=['State', 'Total'],
-        # color_continuous_scale=px.colors.sequential.YlOrRd,
-        color_continuous_scale='Reds',
+        color_continuous_scale='PuRd',
         range_color=[0, 20000],
         labels={'Total': 'Total Suicides'},
-        # template='plotly_dark',
     )
 
     fig.update_geos(fitbounds="locations", visible=False)
@@ -269,7 +266,7 @@ def trends_fig(clicked, selected, type_code, gender, age):
             elif age == 3:
                 selected_age = selected_gender[selected_gender['Age_group'] == '45-59']
             else:
-                selected_age = selected_gender[selected_gender['Age_group'] == '60']
+                selected_age = selected_gender[selected_gender['Age_group'] == '60+']
         # age options for education and social status type code
         else:
             selected_age = selected_gender[selected_gender['Age_group'] == '0-100+']
@@ -293,6 +290,7 @@ def trends_fig(clicked, selected, type_code, gender, age):
 
         hidden = True
         return fig, hidden
+    # init display
     except TypeError:
         hidden = False
         fig = go.Figure()
